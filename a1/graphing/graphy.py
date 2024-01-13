@@ -3,12 +3,20 @@ import pandas
 
 import sys
 
-if len(sys.argv) != 2 or sys.argv[1] in ['-h', '--help']:
-    print(f'usage: python3 {__file__} results.csv')
-    exit(1)
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog='graphy',
+    description='makes a graph for A1',
+)
+
+parser.add_argument('filename', help='The csv file to plot')
+parser.add_argument('-o', '--output', help='A .png to output to instead of rendering', required=False)
+
+args = parser.parse_args()
 
 # Open the file
-file_path = sys.argv[1]
+file_path = args.filename
 
 columns = [
     'DS_TYPENAME', 'TOTAL_THREADS', 'MAXKEY', 'INS', 'DEL', 'prefill_elapsed_ms', 'tree_stats_numNodes', 'total_queries',
@@ -39,4 +47,7 @@ plt.ylabel('Total Throughput')
 plt.legend(lines, labels)
 # lines = plt.scatter(*plot_points[:2])
 
-plt.show()
+if args.output is None:
+    plt.show()
+else:
+    plt.savefig(args.output)
