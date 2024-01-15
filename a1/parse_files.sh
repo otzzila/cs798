@@ -2,9 +2,9 @@
 
 script_dir=$(dirname $0)
 
-echo -n "" >> results.txt
+rm -f results.csv
 
 for file in step*.txt
 do
-    $script_dir/parse_line.sh $file >> results.txt
+    $script_dir/parse_line.sh $file >> results.csv
 done

@@ -25,7 +25,6 @@ void printThreadInfo(int number, bool useCout){
 int main(int argc, char * argv[]){
     // Read inputs naively
     std::string method(getArg(argv, argv+argc, "-t"));
-    std::cout << "method: " << method << std::endl;
 
     int numThreads = std::stoi(getArg(argv, argv+argc, "-n"));
 

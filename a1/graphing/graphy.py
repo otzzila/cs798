@@ -29,22 +29,45 @@ data = pandas.read_csv(file_path,names=columns)
 data = data[data['MAXKEY'] == 2_000_000]
 
 # Select needed columns
-data = data[['DS_TYPENAME', 'TOTAL_THREADS', 'total_throughput']]
+data = data[['DS_TYPENAME', 'INS', 'TOTAL_THREADS', 'total_throughput']]
+
+insertions = data['INS'].unique()
+num_insertions = len(insertions)
+
+fig, axs = plt.subplots(num_insertions//2, 2, sharex=True, sharey=True,)
 
 lines = []
 labels = []
-for data_structure, group in data.groupby('DS_TYPENAME'):
-    plt.scatter(group['TOTAL_THREADS'], group['total_throughput'], label=data_structure, marker='.')
-    # Average for a line
-    averaged = group[['TOTAL_THREADS', 'total_throughput']].groupby( 'TOTAL_THREADS', as_index=False).mean()
-    line, = plt.plot(averaged['TOTAL_THREADS'], averaged['total_throughput'], label=data_structure)
-    lines.append(line)
-    labels.append(data_structure)
+for i, insertion in enumerate(insertions):
+
+    
+    for data_structure, group in data[data['INS']==insertion].groupby('DS_TYPENAME'):
+        ax = axs.flat[i]
+        line, = ax.plot(group['TOTAL_THREADS'], group['total_throughput'], label=data_structure)
+        ax.scatter(group['TOTAL_THREADS'], group['total_throughput'])
+        #plt.scatter(group['TOTAL_THREADS'], group['total_throughput'], label=data_structure, marker='.')
+        # Average for a line
+        #averaged = group[['TOTAL_THREADS', 'total_throughput']].groupby( 'TOTAL_THREADS', as_index=False).mean()
+        #line, = plt.plot(averaged['TOTAL_THREADS'], averaged['total_throughput'], label=data_structure)
+        if i == 1:
+            lines.append(line)
+            labels.append(data_structure)
+        if i % 2 == 0:
+            ax.set(ylabel='Total Throughput')
+        if i >= num_insertions - 2:
+            ax.set(xlabel= 'Total Threads')
+        ax.set_title(f'Insertion percentage: {insertion}')
+
+w, h = fig.get_size_inches()
+
+fig.set_size_inches(w, h*1.3)
+fig.tight_layout()
+fig.subplots_adjust(top=.8, hspace=.3)
+fig.legend(lines, labels)
 
 
-plt.xlabel('Total Threads')
-plt.ylabel('Total Throughput')
-plt.legend(lines, labels)
+
+
 # lines = plt.scatter(*plot_points[:2])
 
 if args.output is None:
