@@ -52,7 +52,13 @@ private:
 public:
     CounterFetchAndAdd(int _numThreads) {}
     int64_t inc(int tid) {
+        #ifdef TEST_WRITE
+        v = v + 1;
+        return v;
+        #endif
+        #ifndef TESTWRITE
         return v++;
+        #endif
     }
     int64_t read() {
         return v;

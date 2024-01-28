@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.html": "django-html",
+        "chrono": "cpp",
+        "thread": "cpp",
+        "atomic": "cpp"
+    }
+}
