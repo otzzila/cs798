@@ -19,6 +19,7 @@ struct globals {
     atomic<bool> done;
     char padding1[64]; // pad counter 0 from done
     padded_subcounter subcounters[MAX_THREADS];
+    char padding2[64];
     
     globals(int _numThreads) {
         numThreads = _numThreads;
@@ -36,7 +37,7 @@ void threadFunc(int tid) {
 
     // increment my subcounter until the experiment is done
     while (true) {
-        g->subcounters[tid].v++;
+        g->subcounters[tid].v += 1;
         myCount++;
         if (g->done) break;
     }
