@@ -51,8 +51,7 @@ bool AlgorithmC::insertIfAbsent(const int tid, const int & key) {
         } else if (found == EMPTY){
             int expected = EMPTY;
             // Attempt a CAS
-            if (data[index].compare_exchange_strong(expected, key,
-            memory_order_release, memory_order_relaxed)){
+            if (data[index].compare_exchange_strong(expected, key)){
                 return true;
             } else if (expected == key){ // data[index] == key the expected should have an updated value
                 return false;
