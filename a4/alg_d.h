@@ -183,7 +183,7 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
     }
 
     // Indicate that we are done migrating
-    t->chunksDone++;
+    
     TRACE TPRINT("<DONE MIGRATION")
     TRACE {
         uint32_t newTotal = 0;
@@ -203,6 +203,7 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
         }
         TRACE PRINT(newTotal);
         TRACE PRINT(oldTotal);
+        
     }
                        
 }
