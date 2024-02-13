@@ -12,7 +12,7 @@ benchmark:
 
 .PHONY: benchmark_debug
 benchmark_debug:
-	$(GPP) $(FLAGS) -o $@.out benchmark.cpp -DTRACE=if\(1\) $(LDFLAGS)
+	$(GPP) $(FLAGS) -o $@.out benchmark.cpp -DTRACE=if\(1\) -DVERBOSE=if\(1\) $(LDFLAGS)
 
 clean:
 	rm -f *.out 

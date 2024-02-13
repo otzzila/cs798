@@ -30,6 +30,9 @@ private:
         capacity(_capacity)
          {
             data = new atomic<int>[capacity];
+            for (int i = 0; i < capacity; ++i){
+                atomic_init(&data[i], EMPTY);
+            }
             approxInserts = new counter(numThreads);
             approxDeletes = new counter(numThreads);
         }
@@ -38,13 +41,24 @@ private:
         table(int numThreads, table * oldT): old(oldT->data), oldCapacity(oldT->capacity), chunksClaimed(0), chunksDone(0)
         {
             // Calculate new capacity
-            double numInsertedValues = oldT->approxInserts->getAccurate() - oldT->approxDeletes->getAccurate();
+            int numInsertedValues = oldT->approxInserts->getAccurate() - oldT->approxDeletes->getAccurate();
 
             if (numInsertedValues <= 0.0) { numInsertedValues = 1.0; }
 
-            capacity = ceil(4 * numInsertedValues / CHUNK_SIZE) * CHUNK_SIZE;
+            capacity = max(4 * numInsertedValues, oldT->capacity);
 
             data = new atomic<int>[capacity];
+            for (int i = 0; i < capacity; ++i){
+                atomic_init(&data[i], EMPTY);
+            }
+            TRACE {
+                for (int i = 0; i < capacity; ++i){
+                    if (data[i] != EMPTY){
+                        throw new bad_alloc();
+                    }
+                }
+            }
+            
             approxInserts = new counter(numThreads);
             approxDeletes = new counter(numThreads);
         } 
@@ -52,10 +66,10 @@ private:
         // destructor
         ~table(){
             // The next table may control data...
-            if (data != nullptr){ delete [] data; }
-            if (old != nullptr){ delete [] old; }
-            delete approxInserts;
-            delete approxDeletes;
+            //if (data != nullptr){ delete [] data; }
+            //if (old != nullptr){ delete [] old; }
+            //delete approxInserts;
+            //delete approxDeletes;
         }
     };
     
@@ -98,6 +112,7 @@ AlgorithmD::~AlgorithmD() {
 }
 
 bool AlgorithmD::expandAsNeeded(const int tid, table * t, int i) {
+    // If expansion is ongoing, help out
     helpExpansion(tid, t);
 
     // Expanding based on inserts only because that is getting filled
@@ -111,50 +126,91 @@ bool AlgorithmD::expandAsNeeded(const int tid, table * t, int i) {
 
 void AlgorithmD::helpExpansion(const int tid, table * t) {
     int totalOldChunks = ceil(static_cast<float>(t->oldCapacity) / CHUNK_SIZE);
+    
     while(t->chunksClaimed < totalOldChunks) {
         int myChunk = t->chunksClaimed.fetch_add(1);
         if (myChunk < totalOldChunks){
             // We got a real chunk and we have to move it
             migrate(tid, t, myChunk);
-            t->chunksDone.fetch_add(1);
+            int chunksDone = t->chunksDone.fetch_add(1);
         }
     }
-
     // busy wait until done ? (this seems like blocking)
     while (!(t->chunksDone == totalOldChunks)) { } // TODO backoff here
+    // Assert totals are the same
+    
+    
 }
 
 void AlgorithmD::startExpansion(const int tid, table * t) {
     if (currentTable == t){
         table * newT = new table(numThreads, t);
         // Attempt to insert or else delete
-        if (!currentTable.compare_exchange_strong(t, newT)) { delete newT; }
+        if (!currentTable.compare_exchange_strong(t, newT)) { delete newT; } 
+        #ifdef DEBUG
+            else {TPRINT("New table!"); } 
+        #endif
     }
     helpExpansion(tid, currentTable);
 }
 
 void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
+    TRACE TPRINT("MIGRATING CHUNK " << myChunk);
+    TRACE TPRINT("Capacity " << t->capacity);
     int start = myChunk * CHUNK_SIZE;
-    for (int idx = start; idx < start + CHUNK_SIZE; ++idx){
+    for (int idx = start; idx < start + CHUNK_SIZE && idx < t->oldCapacity; ++idx){
+        
         // Mark key before copying it
         int currentKey = t->old[idx];
+        int expected = currentKey;
         while (!t->old[idx].compare_exchange_strong(currentKey, currentKey | MARKED_MASK)) {
             /* try again */ 
             // Should not be marked because this is our chunk to migrate
         }
+
+        //TRACE TPRINT(">M Inserting");
         // Now copy it
-        insertIfAbsent(currentKey, currentKey, true);
+        currentKey = currentKey & (~MARKED_MASK); // This should be redundant but I'm keeping it for now
+        if (currentKey != EMPTY && currentKey != TOMBSTONE){
+            bool result = insertIfAbsent(tid, currentKey, true); // Disable expansion or you get stuck in a loop
+            TRACE {if(!result) {
+                    TPRINT("Failed migrate insert: " << bool(currentKey &MARKED_MASK) << " val: " << (currentKey & (~MARKED_MASK)));
+                    TPRINT(this << tid << myChunk << t);
+                }
+            }
+        }
+        //TRACE TPRINT(">M Done Inserting");
     }
 
     // Indicate that we are done migrating
     t->chunksDone++;
+    TRACE TPRINT("<DONE MIGRATION")
+    TRACE {
+        uint32_t newTotal = 0;
+        for (int i = 0; i < t->capacity; ++i){
+            int value = t->data[i] & (~MARKED_MASK);
+            if (value != EMPTY && value != TOMBSTONE){
+                newTotal += value;
+            }
+        }
 
+        uint32_t oldTotal = 0;
+        for (int i = 0; i < t->oldCapacity; ++i){
+            int value = t->old[i] & (~MARKED_MASK);
+            if (value != EMPTY && value != TOMBSTONE){
+                oldTotal += value;
+            }
+        }
+        TRACE PRINT(newTotal);
+        TRACE PRINT(oldTotal);
+    }
+                       
 }
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpansion = false) {
     table * tab = currentTable;
-    int32_t h = murmur3(key);
+    uint32_t h = murmur3(key);
 
     for(int i=0; i < tab->capacity; ++i){
         if (!disableExpansion && expandAsNeeded(tid, tab, i)) {
@@ -198,21 +254,29 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmD::erase(const int tid, const int & key) {
     table * tab = currentTable;
-    int32_t h = murmur3(key);
+    uint32_t h = murmur3(key);
 
     for(int i=0; i < tab->capacity; ++i){
+        // Check if expanding
+        if (expandAsNeeded(tid, tab, i)){
+            return erase(tid, key);
+        }
         // int index = floor(h / INT32_MAX * tab->capacity);
         int index = (h+i) % tab->capacity;
         int found = tab->data[index];
-
-        if (found == key) {
+        
+        if (found & MARKED_MASK){
+            // Marked for expansion, restart
+            return erase(tid, key);
+        } else if (found == key) {
             // Atempt to delete
             if (tab->data[index].compare_exchange_strong(found, TOMBSTONE)){
+                tab->approxDeletes->inc(tid);
                 return true;
             } else if (found == key | MARKED_MASK){
                 // restart in the new table
                 return erase(tid, key);
-            } else {
+            } else if (found == TOMBSTONE) {
                 // This must now be a tombstone
                 return false;
             }
@@ -238,7 +302,10 @@ int64_t AlgorithmD::getSumOfKeys() {
 
     int64_t total = 0;
     for (int i = 0; i < t->capacity; ++i){
-        total += t->data[i];
+        int value = t->data[i] & (~MARKED_MASK);
+        if ((value != TOMBSTONE) && (value != EMPTY)){
+            total += value;
+        }
     }
 
     return total;
