@@ -4,6 +4,11 @@
 #include <cmath>
 using namespace std;
 
+#include <immintrin.h>
+#ifndef WAIT_COUNT
+    #define WAIT_COUNT 100000
+#endif
+
 class AlgorithmD {
 private:
     enum {
@@ -136,7 +141,11 @@ void AlgorithmD::helpExpansion(const int tid, table * t) {
         }
     }
     // busy wait until done ? (this seems like blocking)
-    while (!(t->chunksDone == totalOldChunks)) { } // TODO backoff here
+    while (!(t->chunksDone == totalOldChunks)) {
+        for (int i = 0; i < WAIT_COUNT; ++i){
+            _mm_pause();
+        }
+     } // TODO backoff here
     // Assert totals are the same
     
     
