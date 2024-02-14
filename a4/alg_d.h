@@ -6,7 +6,7 @@ using namespace std;
 
 #include <immintrin.h>
 #ifndef WAIT_COUNT
-    #define WAIT_COUNT 100000
+    #define WAIT_COUNT 10
 #endif
 
 class AlgorithmD {
@@ -47,7 +47,7 @@ private:
         {
             // Calculate new capacity
             int numInsertedValues = oldT->approxInserts->getAccurate() - oldT->approxDeletes->getAccurate();
-
+            //int numInsertedValues = oldT->approxInserts->getAccurate();
             if (numInsertedValues <= 0.0) { numInsertedValues = 1.0; }
 
             capacity = max(4 * numInsertedValues, oldT->capacity);
