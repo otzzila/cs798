@@ -156,9 +156,7 @@ void AlgorithmD::startExpansion(const int tid, table * t) {
         table * newT = new table(numThreads, t);
         // Attempt to insert or else delete
         if (!currentTable.compare_exchange_strong(t, newT)) { delete newT; } 
-        #ifdef DEBUG
-            else {TPRINT("New table!"); } 
-        #endif
+        else {TRACE {TPRINT("New table!");} } 
     }
     helpExpansion(tid, currentTable);
 }
