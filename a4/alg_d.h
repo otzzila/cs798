@@ -98,6 +98,10 @@ public:
     bool erase(const int tid, const int & key);
     long getSumOfKeys();
     void printDebuggingDetails(); 
+
+private:
+    bool insertIfAbsentHashed(const int tid, const int & key, uint32_t h, bool disableExpansion);
+    bool eraseHashed(const int tid, const int & key, uint32_t h);
 };
 
 /**
@@ -155,7 +159,12 @@ void AlgorithmD::startExpansion(const int tid, table * t) {
     if (currentTable == t){
         table * newT = new table(numThreads, t);
         // Attempt to insert or else delete
-        if (!currentTable.compare_exchange_strong(t, newT)) { delete newT; } 
+        if (!currentTable.compare_exchange_strong(t, newT)) { 
+            delete [] newT->data;
+            delete newT->approxDeletes;
+            delete newT->approxInserts;
+            delete newT; 
+        } 
         else {TRACE {TPRINT("New table!");} } 
     }
     helpExpansion(tid, currentTable);
@@ -215,14 +224,12 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
                        
 }
 
-// semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
-bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpansion = false) {
+inline bool AlgorithmD::insertIfAbsentHashed(const int tid, const int & key, uint32_t h, bool disableExpansion = false) {
     table * tab = currentTable;
-    uint32_t h = murmur3(key);
 
     for(int i=0; i < tab->capacity; ++i){
         if (!disableExpansion && expandAsNeeded(tid, tab, i)) {
-            return insertIfAbsent(tid, key, disableExpansion);
+            return insertIfAbsentHashed(tid, key, h, disableExpansion);
         }
 
         // lookup data
@@ -233,7 +240,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 
         if (found & MARKED_MASK) {
             // Restart to help in new table
-            return insertIfAbsent(tid, key, disableExpansion);
+            return insertIfAbsentHashed(tid, key, h, disableExpansion);
         }
         else if (found == key){
             return false; // already here
@@ -247,7 +254,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
                 // CAS failed. found now contains the found value
                 if (found & MARKED_MASK) {
                     // Marked for expansion, try to insert
-                    return insertIfAbsent(tid, key, disableExpansion);
+                    return insertIfAbsentHashed(tid, key, h, disableExpansion);
                 } else if (found == key){
                     return false;
                 }
@@ -257,17 +264,20 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
     
     return false;
 }
-
-
-// semantics: try to erase key. return true if successful, and false otherwise
-bool AlgorithmD::erase(const int tid, const int & key) {
-    table * tab = currentTable;
+// semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
+bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpansion = false) {
     uint32_t h = murmur3(key);
+    return insertIfAbsentHashed(tid, key, h, disableExpansion);
+}
+
+
+inline bool AlgorithmD::eraseHashed(const int tid, const int & key, uint32_t h){
+    table * tab = currentTable;
 
     for(int i=0; i < tab->capacity; ++i){
         // Check if expanding
         if (expandAsNeeded(tid, tab, i)){
-            return erase(tid, key);
+            return eraseHashed(tid, key, h);
         }
         // int index = floor(h / INT32_MAX * tab->capacity);
         int index = (h+i) % tab->capacity;
@@ -275,7 +285,7 @@ bool AlgorithmD::erase(const int tid, const int & key) {
         
         if (found & MARKED_MASK){
             // Marked for expansion, restart
-            return erase(tid, key);
+            return eraseHashed(tid, key, h);
         } else if (found == key) {
             // Atempt to delete
             if (tab->data[index].compare_exchange_strong(found, TOMBSTONE)){
@@ -283,7 +293,7 @@ bool AlgorithmD::erase(const int tid, const int & key) {
                 return true;
             } else if (found == key | MARKED_MASK){
                 // restart in the new table
-                return erase(tid, key);
+                return eraseHashed(tid, key, h);
             } else if (found == TOMBSTONE) {
                 // This must now be a tombstone
                 return false;
@@ -297,6 +307,12 @@ bool AlgorithmD::erase(const int tid, const int & key) {
     }
 
     return false;
+}
+
+// semantics: try to erase key. return true if successful, and false otherwise
+bool AlgorithmD::erase(const int tid, const int & key) {
+    uint32_t h = murmur3(key);
+    return eraseHashed(tid, key, h);
 }
 
 // semantics: return the sum of all KEYS in the set
