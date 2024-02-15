@@ -25,9 +25,10 @@ private:
         int capacity;
         int oldCapacity;
         // Approximate total values with inserts and deletes
+        // Counters have padding on both sides
         counter * approxInserts;
-        counter * approxDeletes;
         atomic<int> chunksClaimed;
+        counter * approxDeletes;
         atomic<int> chunksDone;
         char padding1[PADDING_BYTES];
         // constructor
@@ -102,6 +103,10 @@ public:
 private:
     bool insertIfAbsentHashed(const int tid, const int & key, uint32_t h, bool disableExpansion);
     bool eraseHashed(const int tid, const int & key, uint32_t h);
+
+    debugCounter eraseSpins;
+    debugCounter insertSpins;
+    atomic<int> migrations = 0;
 };
 
 /**
@@ -111,7 +116,8 @@ private:
  * @param _capacity is the INITIAL size of the hash table (maximum number of elements it can contain WITHOUT expansion)
  */
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
-: numThreads(_numThreads), initCapacity(_capacity) {
+: numThreads(_numThreads), initCapacity(_capacity),
+eraseSpins(), insertSpins() {
     currentTable = new table(numThreads, initCapacity);
 }
 
@@ -165,7 +171,7 @@ void AlgorithmD::startExpansion(const int tid, table * t) {
             delete newT->approxInserts;
             delete newT; 
         } 
-        else {TRACE {TPRINT("New table!");} } 
+        else {TRACE {TPRINT("New table!"); migrations++;}} 
     }
     helpExpansion(tid, currentTable);
 }
@@ -201,45 +207,28 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
     // Indicate that we are done migrating
     
     TRACE TPRINT("<DONE MIGRATION")
-    TRACE {
-        uint32_t newTotal = 0;
-        for (int i = 0; i < t->capacity; ++i){
-            int value = t->data[i] & (~MARKED_MASK);
-            if (value != EMPTY && value != TOMBSTONE){
-                newTotal += value;
-            }
-        }
-
-        uint32_t oldTotal = 0;
-        for (int i = 0; i < t->oldCapacity; ++i){
-            int value = t->old[i] & (~MARKED_MASK);
-            if (value != EMPTY && value != TOMBSTONE){
-                oldTotal += value;
-            }
-        }
-        TRACE PRINT(newTotal);
-        TRACE PRINT(oldTotal);
-        
-    }
                        
 }
 
 inline bool AlgorithmD::insertIfAbsentHashed(const int tid, const int & key, uint32_t h, bool disableExpansion = false) {
     table * tab = currentTable;
+    
 
     for(int i=0; i < tab->capacity; ++i){
         if (!disableExpansion && expandAsNeeded(tid, tab, i)) {
+            //TRACE {insertSpins.inc(tid); }
             return insertIfAbsentHashed(tid, key, h, disableExpansion);
         }
 
         // lookup data
         // using the indexing method that allows faster migration
         //int index = floor(h / INT32_MAX * tab->capacity);
-        int index = (h+i) % tab->capacity;
+        int index = (h+ i) % tab->capacity;
         int found = tab->data[index];
 
         if (found & MARKED_MASK) {
             // Restart to help in new table
+            TRACE {insertSpins.inc(tid);}
             return insertIfAbsentHashed(tid, key, h, disableExpansion);
         }
         else if (found == key){
@@ -254,6 +243,7 @@ inline bool AlgorithmD::insertIfAbsentHashed(const int tid, const int & key, uin
                 // CAS failed. found now contains the found value
                 if (found & MARKED_MASK) {
                     // Marked for expansion, try to insert
+                    TRACE {insertSpins.inc(tid);}
                     return insertIfAbsentHashed(tid, key, h, disableExpansion);
                 } else if (found == key){
                     return false;
@@ -276,15 +266,14 @@ inline bool AlgorithmD::eraseHashed(const int tid, const int & key, uint32_t h){
 
     for(int i=0; i < tab->capacity; ++i){
         // Check if expanding
-        if (expandAsNeeded(tid, tab, i)){
-            return eraseHashed(tid, key, h);
-        }
+        helpExpansion(tid, tab);
         // int index = floor(h / INT32_MAX * tab->capacity);
         int index = (h+i) % tab->capacity;
         int found = tab->data[index];
         
         if (found & MARKED_MASK){
             // Marked for expansion, restart
+            TRACE {eraseSpins.inc(tid); }
             return eraseHashed(tid, key, h);
         } else if (found == key) {
             // Atempt to delete
@@ -293,6 +282,7 @@ inline bool AlgorithmD::eraseHashed(const int tid, const int & key, uint32_t h){
                 return true;
             } else if (found == key | MARKED_MASK){
                 // restart in the new table
+                TRACE {eraseSpins.inc(tid);}
                 return eraseHashed(tid, key, h);
             } else if (found == TOMBSTONE) {
                 // This must now be a tombstone
@@ -339,4 +329,8 @@ int64_t AlgorithmD::getSumOfKeys() {
 void AlgorithmD::printDebuggingDetails() {
     PRINT(initCapacity);
     PRINT(currentTable.load()->capacity);
+    TRACE PRINT(insertSpins.getTotal());
+    TRACE PRINT(eraseSpins.getTotal());
+    TRACE PRINT(migrations);
+    
 }
