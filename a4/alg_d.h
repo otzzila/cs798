@@ -291,10 +291,7 @@ inline bool AlgorithmD::eraseHashed(const int tid, const int & key, uint32_t h){
         }
         int found = tab->data[index];
         
-        if (found & MARKED_MASK){
-            // Marked for expansion, restart
-            return eraseHashed(tid, key, h);
-        } else if (found == key) {
+        if (found == key) {
             // Atempt to delete
             if (tab->data[index].compare_exchange_strong(found, TOMBSTONE)){
                 tab->approxDeletes->inc(tid);
@@ -302,13 +299,16 @@ inline bool AlgorithmD::eraseHashed(const int tid, const int & key, uint32_t h){
             } else if (found == key | MARKED_MASK){
                 // restart in the new table
                 return eraseHashed(tid, key, h);
-            } else if (found == TOMBSTONE) {
+            } else if (found & ~MARKED_MASK == TOMBSTONE) {
                 // This must now be a tombstone
                 return false;
             }
-        } else if (found == EMPTY) {
+        } else if (found & ~ MARKED_MASK == EMPTY || found == EMPTY | MARKED_MASK) {
             return false;
-        } 
+        } else if (found & MARKED_MASK){
+            // Marked for expansion, restart
+            return eraseHashed(tid, key, h);
+        }
         // tombstone or a different key so we continue
 
 
