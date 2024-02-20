@@ -227,6 +227,7 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
 inline bool AlgorithmD::insertIfAbsentHashed(const int tid, const int & key, uint32_t h, bool disableExpansion = false) {
     table * tab = currentTable;
 
+    int indexBase = h % tab->capacity;
     for(int i=0; i < tab->capacity; ++i){
         if (!disableExpansion && expandAsNeeded(tid, tab, i)) {
             return insertIfAbsentHashed(tid, key, h, disableExpansion);
@@ -235,7 +236,10 @@ inline bool AlgorithmD::insertIfAbsentHashed(const int tid, const int & key, uin
         // lookup data
         // using the indexing method that allows faster migration
         //int index = floor(h / INT32_MAX * tab->capacity);
-        int index = (h+i) % tab->capacity;
+        int index = indexBase + i;
+        if (index >= tab->capacity) {
+            index -= tab->capacity;
+        }
         int found = tab->data[index];
 
         if (found & MARKED_MASK) {
@@ -274,13 +278,17 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 inline bool AlgorithmD::eraseHashed(const int tid, const int & key, uint32_t h){
     table * tab = currentTable;
 
+    int indexBase = h % tab->capacity;
     for(int i=0; i < tab->capacity; ++i){
         // Check if expanding
         if (expandAsNeeded(tid, tab, i)){
             return eraseHashed(tid, key, h);
         }
         // int index = floor(h / INT32_MAX * tab->capacity);
-        int index = (h+i) % tab->capacity;
+        int index = indexBase + i;
+        if (index >= tab->capacity){
+            index -= tab->capacity;
+        }
         int found = tab->data[index];
         
         if (found & MARKED_MASK){
