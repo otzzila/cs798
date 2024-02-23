@@ -1,0 +1,25 @@
+#!/bin/bash
+
+n = 3
+
+make
+
+for threads in 1 4 16
+do
+    for method in A B C D
+    do
+	for ((time = 1000; time <= 10000; time = time + 1000))
+	    for ((i = 0 ; i < n ; i++)
+		do
+		    
+		done
+	do
+    done
+done
+
+
+
+for method in A B C D
+do
+    
+done
