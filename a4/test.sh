@@ -1,8 +1,8 @@
 #!/bin/bash
 
-output="&1"
-range=100000000
-size=100000
+output="results1000on1000000.txt"
+range=1000
+size=1000000
 
 n=3
 
