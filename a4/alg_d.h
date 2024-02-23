@@ -106,7 +106,7 @@ private:
 
     debugCounter eraseSpins;
     debugCounter insertSpins;
-    atomic<int> migrations = 0;
+    atomic<int> migrations;
 };
 
 /**
@@ -117,7 +117,7 @@ private:
  */
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), initCapacity(_capacity),
-eraseSpins(), insertSpins() {
+eraseSpins(), insertSpins(), migrations(0) {
     currentTable = new table(numThreads, initCapacity);
 }
 
