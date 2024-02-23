@@ -1,6 +1,6 @@
 #!/bin/bash
 
-output=test100000x1000.txt
+output="&1"
 range=100000000
 size=100000
 
@@ -17,7 +17,7 @@ do
 	do
 	    for ((i = 0 ; i < n ; i = i + 1))
 	    do
-		echo -n $method,$time,$threads >> $output
+		echo -n "$method@$threads,$time," >> $output
 		LD_PRELOAD=./libjemalloc.so taskset -c 0-$((threads-1)) ./benchmark.out -a $method -sT $size -sR $range -m $time -t $threads | grep ^throughput | cut -d":" -f2 | xargs >> $output
 		echo "$method $i"
 	    done
