@@ -46,11 +46,12 @@ private:
         table(int numThreads, table * oldT): old(oldT->data), oldCapacity(oldT->capacity), chunksClaimed(0), chunksDone(0)
         {
             // Calculate new capacity
-            int numInsertedValues = oldT->approxInserts->getAccurate() - oldT->approxDeletes->getAccurate();
+            int inserts = oldT->approxInserts->getAccurate();
+            int numInsertedValues = inserts - oldT->approxDeletes->getAccurate();
             //int numInsertedValues = oldT->approxInserts->getAccurate();
             if (numInsertedValues <= 0.0) { numInsertedValues = 1.0; }
 
-            capacity = max(4 * numInsertedValues, oldT->capacity);
+            capacity = max(8 * numInsertedValues, oldT->capacity);
 
             data = new atomic<int>[capacity];
             for (int i = 0; i < capacity; ++i){
@@ -105,6 +106,8 @@ public:
 private:
     bool insertIfAbsentHashed(const int tid, const int & key, uint32_t h, bool disableExpansion);
     bool eraseHashed(const int tid, const int & key, uint32_t h);
+    ElapsedTimer elapsedTimer;
+    int64_t tableStartTime;
 };
 
 /**
@@ -114,8 +117,9 @@ private:
  * @param _capacity is the INITIAL size of the hash table (maximum number of elements it can contain WITHOUT expansion)
  */
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
-: numThreads(_numThreads), initCapacity(_capacity), successfulDeletes(), successfulInserts() {
+: numThreads(_numThreads), initCapacity(_capacity), successfulDeletes(), successfulInserts(), elapsedTimer() {
     currentTable = new table(numThreads, initCapacity);
+    elapsedTimer.startTimer();
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -144,7 +148,13 @@ void AlgorithmD::helpExpansion(const int tid, table * t) {
         if (myChunk < totalOldChunks){
             // We got a real chunk and we have to move it
             migrate(tid, t, myChunk);
-            int chunksDone = t->chunksDone.fetch_add(1);
+            int chunksDone = t->chunksDone.fetch_add(1) + 1;
+            TRACE {
+                if (chunksDone == totalOldChunks){
+                    auto timePassed = elapsedTimer.getElapsedMillis() - tableStartTime;
+                    TPRINT("expansion at_ms=" << tableStartTime <<" duration_ms=" << timePassed << " oldCapacity="<<t->oldCapacity << " newCapacity="<< t->capacity);
+                }
+            }
         }
     }
     // busy wait until done ? (this seems like blocking)
@@ -160,6 +170,7 @@ void AlgorithmD::helpExpansion(const int tid, table * t) {
 
 void AlgorithmD::startExpansion(const int tid, table * t) {
     if (currentTable == t){
+        int64_t start = elapsedTimer.getElapsedMillis();
         table * newT = new table(numThreads, t);
         // Attempt to insert or else delete
         if (!currentTable.compare_exchange_strong(t, newT)) { 
@@ -168,14 +179,21 @@ void AlgorithmD::startExpansion(const int tid, table * t) {
             delete newT->approxInserts;
             delete newT; 
         } 
-        else {TRACE {TPRINT("New table!"); rebuilds.inc(tid); } } 
+        else {
+            TRACE {
+                int64_t time_taken = elapsedTimer.getElapsedMillis() - start;
+                tableStartTime = start;
+                // TPRINT("New table! Time taken: " << time_taken << "ms");
+                rebuilds.inc(tid);
+             } 
+        } 
     }
     helpExpansion(tid, currentTable);
 }
 
 void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
-    TRACE TPRINT("MIGRATING CHUNK " << myChunk);
-    TRACE TPRINT("Capacity " << t->capacity);
+    //TRACE TPRINT("MIGRATING CHUNK " << myChunk);
+    //TRACE TPRINT("Capacity " << t->capacity);
     int start = myChunk * CHUNK_SIZE;
     for (int idx = start; idx < start + CHUNK_SIZE && idx < t->oldCapacity; ++idx){
         
@@ -204,7 +222,8 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
 
     // Indicate that we are done migrating
     
-    TRACE TPRINT("<DONE MIGRATION")
+    //TRACE TPRINT("<DONE MIGRATION");
+    /*
     TRACE {
         uint32_t newTotal = 0;
         for (int i = 0; i < t->capacity; ++i){
@@ -223,8 +242,8 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
         }
         TRACE PRINT(newTotal);
         TRACE PRINT(oldTotal);
-        
     }
+    */
                        
 }
 
