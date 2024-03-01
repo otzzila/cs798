@@ -1,0 +1,51 @@
+Example: usage of casword_t and KCASLockFree
+
+Here is a more complete example of using casword_t and KCASLockFree.
+
+#include "kcas.h"
+
+struct object_t {
+    casword_t intValue;  // represents an "int" that can be changed by kcas
+    casword_t doublePtr; // represents a "double *" that can be changed by kcas
+};
+
+int main() {
+        int tid = 0; // in practice, this should be the current thread's ID (0 to n-1 where n = # threads)
+
+        KCASLockFree<2> kcas; // largest # of addresses we will perform a kcas on is 2
+        // note: you should only ever need to create *one* instance of KCASLockFree
+
+        // create and initialize some object_t
+
+        object_t * myObj = new object_t();
+        kcas.writeInitVal(tid, &myObj->intValue, (casword_t) 13);
+        double * myDoublePtr = new double;
+        kcas.writeInitPtr(tid, &myObj->doublePtr, (casword_t) myDoublePtr);
+
+        // how to read casword_t fields of object_t
+
+        casword_t result = kcas.readPtr(tid, &myObj->doublePtr);
+        double * dptr = (double *) result;
+        printf("myObj doublePtr=%p\n", dptr);
+
+        casword_t result2 = kcas.readVal(tid, &myObj->intValue);
+        int val = (int) result2;
+        printf("myObj intValue=%d\n", val);
+
+        // do a 2-cas on the fields of myObj changing from (13, dptr) to (11, NULL)
+
+        auto descPtr = kcas.getDescriptor(tid);
+        descPtr->addValAddr(&myObj->intValue, (casword_t) 13, (casword_t) 11);
+        descPtr->addPtrAddr(&myObj->doublePtr, (casword_t) dptr, (casword_t) NULL);
+        if (kcas.execute(tid, descPtr)) {
+            printf("kcas succeeded.\n");
+        } else {
+            printf("kcas failed.\n");
+        }
+
+        printf("myObj final contents: intValue=%d doublePtr=%p\n",
+                    (int)      kcas.readVal(tid, &myObj->intValue),
+                    (double *) kcas.readPtr(tid, &myObj->doublePtr));
+
+    return 0;
+}
