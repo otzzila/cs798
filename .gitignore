@@ -33,3 +33,6 @@
 *.exe
 *.out
 *.app
+a5/benchmark
+a5/benchmark_sanitize
+**/bps

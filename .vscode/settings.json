@@ -17,6 +17,7 @@
         "tuple": "cpp",
         "utility": "cpp",
         "vector": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "cassert": "cpp"
     }
 }

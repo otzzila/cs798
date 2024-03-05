@@ -60,6 +60,7 @@ public:
             globalCounter.fetch_add(val);
             subcounters[tid].v = 0;
         }
+        return 0;
     }
     int64_t get() {
         return globalCounter;
