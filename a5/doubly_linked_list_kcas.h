@@ -6,22 +6,22 @@
 #include "defines.h"
 #include "kcas.h"
 
-struct node {
-    casword_t prevPtr;
-    casword_t nextPtr;
-    casword_t key;
-    casword_t marked;
-
-    node(const int & tid, KCASLockFree<5> & kcas, int _key, node * prev, node * next) {
-        kcas.writeInitPtr(tid, &prevPtr, (casword_t) prev);
-        kcas.writeInitPtr(tid, &nextPtr, (casword_t) next);
-        kcas.writeInitVal(tid, &key, (casword_t) _key);
-        kcas.writeInitVal(tid, &marked, (casword_t) false);
-    }
-};
-
 class DoublyLinkedList {
 private:
+    struct node {
+        casword_t prevPtr;
+        casword_t nextPtr;
+        casword_t key;
+        casword_t marked;
+
+        node(const int & tid, KCASLockFree<5> & kcas, int _key, node * prev, node * next) {
+            kcas.writeInitPtr(tid, &prevPtr, (casword_t) prev);
+            kcas.writeInitPtr(tid, &nextPtr, (casword_t) next);
+            kcas.writeInitVal(tid, &key, (casword_t) _key);
+            kcas.writeInitVal(tid, &marked, (casword_t) false);
+        }
+    };
+
     volatile char padding0[PADDING_BYTES];
     const int numThreads;
     const int minKey;
@@ -31,6 +31,8 @@ private:
     volatile char padding1[PADDING_BYTES];
     casword_t head;
     volatile char padding4[PADDING_BYTES];
+
+    
 
 public:
     DoublyLinkedList(const int _numThreads, const int _minKey, const int _maxKey);
@@ -215,12 +217,11 @@ void DoublyLinkedList::printDebuggingDetails() {
 }
 
 
-pair<node*, node*> DoublyLinkedList::internalSearch(const int tid, const int & key){
+pair<DoublyLinkedList::node*, DoublyLinkedList::node*> DoublyLinkedList::internalSearch(const int tid, const int & key){
     node * pred = (node*) kcas.readPtr(0, &head);
     node * succ = (node*) kcas.readPtr(0, &head);
 
     while (true){
-        // TODO may not need NULL check?
         if (succ == 0 || key <= (int)kcas.readVal(tid, &succ->key)){
             return pair(pred, succ);
         }
