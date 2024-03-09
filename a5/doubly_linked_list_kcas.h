@@ -35,8 +35,10 @@ private:
     volatile char padding2[PADDING_BYTES];
     KCASLockFree<5> kcas; // Max 5 addresses in algo, can we reduce by using a bit in a ptr?
     volatile char padding1[PADDING_BYTES];
-    casword_t head;
+    node head;
     volatile char padding4[PADDING_BYTES];
+    node tail;
+    volatile char padding5[PADDING_BYTES];
 
     
 
@@ -67,8 +69,8 @@ private:
 
 DoublyLinkedList::DoublyLinkedList(const int _numThreads, const int _minKey, const int _maxKey)
         : numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey),
-        kcas() {
-            kcas.writeInitPtr(0, &head, (casword_t) 0);
+        kcas(), head(0, kcas, -1, 0, &tail), tail(0, kcas, -1, &head, 0) {
+            //kcas.writeInitPtr(0, &head, (casword_t) 0);
     // it may be useful to know about / use the "placement new" operator (google)
     // because the simple_record_manager::allocate does not take constructor arguments
     // ... placement new essentially lets you call a constructor after an object already exists.
@@ -95,16 +97,13 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
         node * pred = found.first;
         node * succ = found.second;
         // Check if already inserted
-        if (succ != 0 && key == succ->key) {
+        if (succ != &tail && key == succ->key) {
             TRACE TPRINT("Already inserted " <<key << "\n");
             return false;
         }
 
         bool newHead = pred == 0;
 
-        if (newHead){
-            pred = 0;
-        }
         node * n = new node(tid, kcas, key, pred, succ); // make pred null
         //cout << "Insert " << (int)key << endl;
         // PRINT(key);
@@ -119,18 +118,12 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
         // Perform kcas
         auto descPtr = kcas.getDescriptor(tid);
 
-        if (newHead){
-            // move head from it's last value to n
-            descPtr->addPtrAddr(&head, (casword_t) succ, (casword_t) n);
-        } else {
-            descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, (casword_t) n);
-            descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
-        }
+        
+        descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, (casword_t) n);
+        descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
 
-        if (succ != 0){
-            descPtr->addPtrAddr(&succ->prevPtr, (casword_t) pred, (casword_t) n);
-            descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) false);
-        }
+        descPtr->addPtrAddr(&succ->prevPtr, (casword_t) pred, (casword_t) n);
+        descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) false);
 
         if (kcas.execute(tid, descPtr)) {
             //assert((node *) kcas.readPtr(tid, &pred->nextPtr) == n);
@@ -155,7 +148,7 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
         node * pred = found.first;
         node * succ = found.second;
         // Check if already inserted
-        if (succ == 0 || key != succ->key) {
+        if (succ == &tail || key != succ->key) {
             //TRACE TPRINT("Erase failed! " << key << "\n")
             return false;
         }
@@ -166,22 +159,14 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
         node * after = (node *) afterW;
 
 
-        bool removeHead = pred == 0;
-
-        if (removeHead){
-            descPtr->addPtrAddr(&head, (casword_t) succ, (casword_t) after);
-        } else {
-            descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, (casword_t) after);
-            descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
-        }
+        descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, (casword_t) after);
+        descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
         
         // We get marked for removal
         descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) true);
 
-        if (after != 0){
-            descPtr->addValAddr(&after->marked, (casword_t) false, (casword_t) false);
-            descPtr->addPtrAddr(&after->prevPtr, (casword_t) succ, (casword_t) pred);
-        }
+        descPtr->addValAddr(&after->marked, (casword_t) false, (casword_t) false);
+        descPtr->addPtrAddr(&after->prevPtr, (casword_t) succ, (casword_t) pred);
         
 
         if (kcas.execute(tid, descPtr)) {
@@ -197,10 +182,10 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
 long DoublyLinkedList::getSumOfKeys() {
     long total = 0;
 
-    node * current = (node*) kcas.readPtr(0, &head);
+    node * current = (node*) kcas.readPtr(0, &head.nextPtr);
     const int tid = 0;
 
-    while (current != 0) {
+    while (current != &tail) {
         total += current->key;
 
         current = (node *)kcas.readPtr(tid, &current->nextPtr);
@@ -211,7 +196,7 @@ long DoublyLinkedList::getSumOfKeys() {
 }
 
 void DoublyLinkedList::printDebuggingDetails() {
-    node * current = (node*) kcas.readPtr(0, &head);
+    node * current = (node*) kcas.readPtr(0, &head.nextPtr);
     const int tid = 0;
 
     long total = 0;
@@ -230,11 +215,11 @@ void DoublyLinkedList::printDebuggingDetails() {
 
 
 pair<DoublyLinkedList::node*, DoublyLinkedList::node*> DoublyLinkedList::internalSearch(const int tid, const int & key){
-    node * pred = 0;
-    node * succ = (node*) kcas.readPtr(0, &head);
+    node * pred = &head;
+    node * succ = (node*) kcas.readPtr(0, &head.nextPtr);
 
     while (true){
-        if (succ == 0 || key <= succ->key){
+        if (succ == &tail || key <= succ->key){
             return pair(pred, succ);
         }
         pred = succ;
