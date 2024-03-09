@@ -3,8 +3,14 @@
 #include <cassert>
 #include <utility>
 
+#include <immintrin.h>
+
 #include "defines.h"
 #include "kcas.h"
+
+#ifndef MAX_WAITS
+#define MAX_WAITS 100
+#endif
 
 class DoublyLinkedList {
 private:
@@ -48,11 +54,12 @@ private:
     pair<node *, node *> internalSearch(const int tid, const int & key);
 
     inline void printNode(const int tid, node * n){
-        printf("Node<%d, %p, %p>@%p\n",
-         (int) kcas.readVal(tid, &n->key),
-         (node *) kcas.readPtr(tid, &n->prevPtr),
-         (node *) kcas.readPtr(tid, &n->nextPtr),
-         n
+        printf("%p Node<%d, %d, %p, %p>\n",
+            n,
+            (bool) kcas.readVal(tid, &n->marked),
+            (int) kcas.readVal(tid, &n->key),
+            (node *) kcas.readPtr(tid, &n->prevPtr),
+            (node *) kcas.readPtr(tid, &n->nextPtr)
         );
     }
 };
@@ -81,6 +88,7 @@ bool DoublyLinkedList::contains(const int tid, const int & key) {
 
 bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
     assert(key > minKey - 1 && key >= minKey && key <= maxKey && key < maxKey + 1);
+    
     while (true){
         pair<node*, node*> found = internalSearch(tid, key);
         node * pred = found.first;
@@ -90,45 +98,49 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
             TRACE TPRINT("Already inserted " <<key << "\n");
             return false;
         }
-        node * n;
-        
+
+        bool newHead = pred == 0;
+
+        if (newHead){
+            pred = 0;
+        }
+        node * n = new node(tid, kcas, key, pred, succ); // make pred null
+        cout << "Insert " << key << endl;
+        // PRINT(key);
+        PRINT(((node*) kcas.readPtr(tid, &head)));
+        PRINT(pred);
+        PRINT(succ);
+        printDebuggingDetails();
+        //kcas.writeInitPtr(tid, &n->prevPtr, (casword_t) pred);
+        //kcas.writeInitPtr(tid, &n->nextPtr, (casword_t) succ);
+
 
         // Perform kcas
         auto descPtr = kcas.getDescriptor(tid);
-        
-        if (pred == succ){
-            // We are replacing the head
-            n = new node(tid, kcas, key, 0, succ); // make pred null
-            casword_t cwN = (casword_t) n;
-            descPtr->addPtrAddr(&head, (casword_t) succ, cwN);
 
-            if (succ != 0){
-                
-                descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) false);
-                descPtr->addPtrAddr(&succ->prevPtr, (casword_t) 0, cwN);
-            }
+        if (newHead){
+            // move head from it's last value to n
+            descPtr->addPtrAddr(&head, (casword_t) succ, (casword_t) n);
         } else {
-            n = new node(tid, kcas, key, pred, succ); // make pred null
-            casword_t cwN = (casword_t) n;
+            descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, (casword_t) n);
             descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
-            descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, cwN);
-
-            if (succ != 0){
-                descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) false);
-                descPtr->addPtrAddr(&succ->prevPtr, (casword_t) pred, cwN);
-            }
         }
-        
-        
-        
+
+        if (succ != 0){
+            descPtr->addPtrAddr(&succ->prevPtr, (casword_t) pred, (casword_t) n);
+            descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) false);
+        }
 
         if (kcas.execute(tid, descPtr)) {
             //assert((node *) kcas.readPtr(tid, &pred->nextPtr) == n);
             //assert((node *) kcas.readPtr(tid, &succ->prevPtr) == n);
-            TRACE TPRINT("Insert worked! " << key << "\n");
+            TRACE {TPRINT("Insert worked! " << key << "\n")};
             return true;
         } else {
             delete n;
+            for (int i = 0; i < MAX_WAITS; ++i){
+                _mm_pause();
+            }
         }
     }
 
@@ -148,41 +160,45 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
         }
 
         
+
+        
         // Perform kcas
         auto descPtr = kcas.getDescriptor(tid);
         casword_t afterW = kcas.readPtr(tid, &succ->nextPtr);
         node * after = (node *) afterW;
 
-        if (pred == succ){
-            // Removing head. 
-            // New head is after (our successor)
+        cout << "Delete " << key << endl;
+        // PRINT(key);
+        PRINT(((node*) kcas.readPtr(tid, &head)));
+        PRINT(pred);
+        PRINT(succ);
+        PRINT(after);
+        printDebuggingDetails();
+
+        bool removeHead = pred == 0;
+
+        if (removeHead){
             descPtr->addPtrAddr(&head, (casword_t) succ, (casword_t) after);
-
-            if (after != 0){
-                // If a node follows us, make sure it still is there and change it's previous pointer
-                descPtr->addValAddr(&after->marked, (casword_t) false, (casword_t) false);
-                // after is now the head, so it should point to 0
-                descPtr->addPtrAddr(&after->prevPtr, (casword_t) succ, (casword_t) 0);
-            }
         } else {
-            // We are not the head. Ensure our pred is still there and now points to the next node
+            descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, (casword_t) after);
             descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
-            descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, afterW);
-
-            if (after != 0){
-                // If a node follows us, make sure it still is there and change it's previous pointer
-                descPtr->addValAddr(&after->marked, (casword_t) false, (casword_t) false);
-                descPtr->addPtrAddr(&after->prevPtr, (casword_t) succ, (casword_t) pred);
-            }
         }
         
         // We get marked for removal
         descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) true);
+
+        if (after != 0){
+            descPtr->addValAddr(&after->marked, (casword_t) false, (casword_t) false);
+            descPtr->addValAddr(&after->prevPtr, (casword_t) succ, (casword_t) pred);
+        }
         
 
         if (kcas.execute(tid, descPtr)) {
-            TRACE TPRINT("Erase Worked!")
+            // TRACE {TPRINT("Erase Worked! " << key << "\n" );}
+            PRINT(true);
             return true;
+        } else {
+            PRINT(false);
         }
     }
     
@@ -218,7 +234,7 @@ void DoublyLinkedList::printDebuggingDetails() {
 
 
 pair<DoublyLinkedList::node*, DoublyLinkedList::node*> DoublyLinkedList::internalSearch(const int tid, const int & key){
-    node * pred = (node*) kcas.readPtr(0, &head);
+    node * pred = 0;
     node * succ = (node*) kcas.readPtr(0, &head);
 
     while (true){
