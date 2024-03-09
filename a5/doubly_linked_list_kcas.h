@@ -216,7 +216,7 @@ void DoublyLinkedList::printDebuggingDetails() {
 
 pair<DoublyLinkedList::node*, DoublyLinkedList::node*> DoublyLinkedList::internalSearch(const int tid, const int & key){
     node * pred = &head;
-    node * succ = (node*) kcas.readPtr(0, &head.nextPtr);
+    node * succ = (node*) kcas.readPtr(tid, &head.nextPtr);
 
     while (true){
         if (succ == &tail || key <= succ->key){
