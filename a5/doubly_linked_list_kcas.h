@@ -9,7 +9,7 @@
 #include "kcas.h"
 
 #ifndef MAX_WAITS
-#define MAX_WAITS 100
+#define MAX_WAITS 10
 #endif
 
 class DoublyLinkedList {
@@ -17,13 +17,13 @@ private:
     struct node {
         casword_t prevPtr;
         casword_t nextPtr;
-        casword_t key;
+        int key;
         casword_t marked;
 
         node(const int & tid, KCASLockFree<5> & kcas, int _key, node * prev, node * next) {
             kcas.writeInitPtr(tid, &prevPtr, (casword_t) prev);
             kcas.writeInitPtr(tid, &nextPtr, (casword_t) next);
-            kcas.writeInitVal(tid, &key, (casword_t) _key);
+            key = _key;
             kcas.writeInitVal(tid, &marked, (casword_t) false);
         }
     };
@@ -53,11 +53,12 @@ public:
 private:
     pair<node *, node *> internalSearch(const int tid, const int & key);
 
-    inline void printNode(const int tid, node * n){
+    void printNode(const int tid, node * n){
+        if (n == nullptr || n == 0 || !n){return;}      
         printf("%p Node<%d, %d, %p, %p>\n",
             n,
             (bool) kcas.readVal(tid, &n->marked),
-            (int) kcas.readVal(tid, &n->key),
+            n->key,
             (node *) kcas.readPtr(tid, &n->prevPtr),
             (node *) kcas.readPtr(tid, &n->nextPtr)
         );
@@ -83,7 +84,7 @@ bool DoublyLinkedList::contains(const int tid, const int & key) {
     if (succ == 0){
         return false;
     }
-    return kcas.readVal(tid, &succ->key) == key;
+    return succ->key == key;
 }
 
 bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
@@ -94,7 +95,7 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
         node * pred = found.first;
         node * succ = found.second;
         // Check if already inserted
-        if (succ != 0 && key == (int)kcas.readVal(tid, &succ->key)) {
+        if (succ != 0 && key == succ->key) {
             TRACE TPRINT("Already inserted " <<key << "\n");
             return false;
         }
@@ -105,12 +106,12 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
             pred = 0;
         }
         node * n = new node(tid, kcas, key, pred, succ); // make pred null
-        cout << "Insert " << key << endl;
+        //cout << "Insert " << (int)key << endl;
         // PRINT(key);
-        PRINT(((node*) kcas.readPtr(tid, &head)));
-        PRINT(pred);
-        PRINT(succ);
-        printDebuggingDetails();
+        //PRINT(((node*) kcas.readPtr(tid, &head)));
+        //PRINT(pred);
+        //PRINT(succ);
+        // printDebuggingDetails();
         //kcas.writeInitPtr(tid, &n->prevPtr, (casword_t) pred);
         //kcas.writeInitPtr(tid, &n->nextPtr, (casword_t) succ);
 
@@ -134,7 +135,7 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
         if (kcas.execute(tid, descPtr)) {
             //assert((node *) kcas.readPtr(tid, &pred->nextPtr) == n);
             //assert((node *) kcas.readPtr(tid, &succ->prevPtr) == n);
-            TRACE {TPRINT("Insert worked! " << key << "\n")};
+            // TPRINT("Insert worked! " << key << "\n");
             return true;
         } else {
             delete n;
@@ -154,26 +155,16 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
         node * pred = found.first;
         node * succ = found.second;
         // Check if already inserted
-        if (succ == 0 || key != (int)kcas.readVal(tid, &succ->key)) {
-            TRACE TPRINT("Erase failed! " << key << "\n")
+        if (succ == 0 || key != succ->key) {
+            //TRACE TPRINT("Erase failed! " << key << "\n")
             return false;
         }
-
-        
-
         
         // Perform kcas
         auto descPtr = kcas.getDescriptor(tid);
         casword_t afterW = kcas.readPtr(tid, &succ->nextPtr);
         node * after = (node *) afterW;
 
-        cout << "Delete " << key << endl;
-        // PRINT(key);
-        PRINT(((node*) kcas.readPtr(tid, &head)));
-        PRINT(pred);
-        PRINT(succ);
-        PRINT(after);
-        printDebuggingDetails();
 
         bool removeHead = pred == 0;
 
@@ -189,16 +180,14 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
 
         if (after != 0){
             descPtr->addValAddr(&after->marked, (casword_t) false, (casword_t) false);
-            descPtr->addValAddr(&after->prevPtr, (casword_t) succ, (casword_t) pred);
+            descPtr->addPtrAddr(&after->prevPtr, (casword_t) succ, (casword_t) pred);
         }
         
 
         if (kcas.execute(tid, descPtr)) {
-            // TRACE {TPRINT("Erase Worked! " << key << "\n" );}
-            PRINT(true);
+            //{TPRINT("Erase Worked! " << key << "\n" );}
+            //PRINT(true);
             return true;
-        } else {
-            PRINT(false);
         }
     }
     
@@ -212,7 +201,7 @@ long DoublyLinkedList::getSumOfKeys() {
     const int tid = 0;
 
     while (current != 0) {
-        total += (int) kcas.readVal(tid, &current->key);
+        total += current->key;
 
         current = (node *)kcas.readPtr(tid, &current->nextPtr);
     };
@@ -225,11 +214,18 @@ void DoublyLinkedList::printDebuggingDetails() {
     node * current = (node*) kcas.readPtr(0, &head);
     const int tid = 0;
 
+    long total = 0;
+
     while (current != 0) {
+        assert(current != 0);
+        PRINT(current);
         printNode(tid, current);
 
+        total += current->key;
         current = (node *)kcas.readPtr(tid, &current->nextPtr);
     };
+
+    PRINT(total);
 }
 
 
@@ -238,7 +234,7 @@ pair<DoublyLinkedList::node*, DoublyLinkedList::node*> DoublyLinkedList::interna
     node * succ = (node*) kcas.readPtr(0, &head);
 
     while (true){
-        if (succ == 0 || key <= (int)kcas.readVal(tid, &succ->key)){
+        if (succ == 0 || key <= succ->key){
             return pair(pred, succ);
         }
         pred = succ;
