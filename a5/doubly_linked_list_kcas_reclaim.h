@@ -97,8 +97,9 @@ bool DoublyLinkedListReclaim::contains(const int tid, const int & key) {
 bool DoublyLinkedListReclaim::insertIfAbsent(const int tid, const int & key) {
     assert(key > minKey - 1 && key >= minKey && key <= maxKey && key < maxKey + 1);
     // TODO guard inside or out of while loop?
+    auto guard = nodemgr.getGuard(tid);
     while (true){
-        auto guard = nodemgr.getGuard(tid);
+        
         pair<node*, node*> found = internalSearch(tid, key);
         node * pred = found.first;
         node * succ = found.second;
@@ -157,8 +158,8 @@ bool DoublyLinkedListReclaim::insertIfAbsent(const int tid, const int & key) {
 
 bool DoublyLinkedListReclaim::erase(const int tid, const int & key) {
     assert(key > minKey - 1 && key >= minKey && key <= maxKey && key < maxKey + 1);
+    auto guard = nodemgr.getGuard(tid);
     while (true){
-        auto guard = nodemgr.getGuard(tid);
         pair<node*, node*> found = internalSearch(tid, key);
         node * pred = found.first;
         node * succ = found.second;
@@ -202,7 +203,7 @@ bool DoublyLinkedListReclaim::erase(const int tid, const int & key) {
         
 
         if (kcas.execute(tid, descPtr)) {
-            TRACE TPRINT("Erase Worked!")
+            TRACE {TPRINT("Erase Worked!");}
             nodemgr.retire<node>(tid, succ); // We can set succ to be deleted
             return true;
         }

@@ -1,5 +1,5 @@
 GPP = g++-9
-FLAGS = -O3 -g -std=c++2a
+FLAGS = -O3 -g -std=c++2a -mrtm
 #FLAGS += -DNDEBUG
 LDFLAGS = -pthread
 

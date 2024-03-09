@@ -3,8 +3,13 @@
 #include <cassert>
 #include <utility>
 
+#include <immintrin.h>
+
 #include "defines.h"
 #include "kcas.h"
+
+
+#define MAX_TRANSACTIONAL_ATTEMPTS 20
 
 class DoublyLinkedList {
 private:
@@ -81,6 +86,9 @@ bool DoublyLinkedList::contains(const int tid, const int & key) {
 
 bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
     assert(key > minKey - 1 && key >= minKey && key <= maxKey && key < maxKey + 1);
+
+    // Transactional attempts
+    
     while (true){
         pair<node*, node*> found = internalSearch(tid, key);
         node * pred = found.first;
@@ -91,6 +99,89 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
             return false;
         }
         node * n;
+        bool newHead = pred == succ;
+        if (newHead){
+            pred = 0;
+        }
+        n = new node(tid, kcas, key, pred, succ);
+        casword_t cwN = (casword_t) n;
+        int retriesLeft = MAX_TRANSACTIONAL_ATTEMPTS;
+        unsigned int status;
+    retry:
+        if ((status = _xbegin()) == _XBEGIN_STARTED){
+            if (newHead) {
+                if (head != (casword_t) succ){
+                    _xabort(1);
+                } else {
+                    head = cwN;
+                }
+            } else {
+                if (
+                    pred->marked != (casword_t) false << KCAS_LEFTSHIFT ||
+                    pred->nextPtr != (casword_t) succ
+                ) {
+                    _xabort(1);
+                } else {
+                    pred->nextPtr = cwN;
+                }
+            }
+
+            if (succ != 0){
+                if (
+                    succ->marked != (casword_t) false << KCAS_LEFTSHIFT
+                    || succ->prevPtr != (casword_t) pred
+                ){
+                    succ->prevPtr = cwN;
+                }
+            }
+
+            _xend();
+            return true;
+        } else {
+            // Aborted
+            if ((--retriesLeft > 0) && !(status & _XABORT_EXPLICIT)){
+                goto retry;
+            }
+
+            // Slow path
+            auto descPtr = kcas.getDescriptor(tid);
+            casword_t cwN = (casword_t) n;
+
+            if (newHead){
+                descPtr->addPtrAddr(&head, (casword_t) succ, cwN);
+            } else {
+                descPtr->addValAddr(&pred->marked, (casword_t) false, (casword_t) false);
+                descPtr->addPtrAddr(&pred->nextPtr, (casword_t) succ, cwN);
+            }
+
+            if (succ != 0){
+                descPtr->addValAddr(&succ->marked, (casword_t) false, (casword_t) false);
+                descPtr->addPtrAddr(&succ->prevPtr, (casword_t) pred, cwN);
+            }
+
+            if (kcas.execute(tid, descPtr)) {
+                //assert((node *) kcas.readPtr(tid, &pred->nextPtr) == n);
+                //assert((node *) kcas.readPtr(tid, &succ->prevPtr) == n);
+                TRACE TPRINT("Insert worked! " << key << "\n");
+                return true;
+            } else {
+                delete n;
+            }
+        }
+
+    }
+
+    while (true){
+        pair<node*, node*> found = internalSearch(tid, key);
+        node * pred = found.first;
+        node * succ = found.second;
+        // Check if already inserted
+        if (succ != 0 && key == (int)kcas.readVal(tid, &succ->key)) {
+            TRACE TPRINT("Already inserted " <<key << "\n");
+            return false;
+        }
+        node * n;
+        
         
 
         // Perform kcas
@@ -183,6 +274,8 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
         if (kcas.execute(tid, descPtr)) {
             TRACE TPRINT("Erase Worked!")
             return true;
+        } else {
+            // TODO backoff
         }
     }
     
