@@ -131,7 +131,7 @@ bool DoublyLinkedListReclaim::insertIfAbsent(const int tid, const int & key) {
             // TPRINT("Insert worked! " << key << "\n");
             return true;
         } else {
-            nodemgr.deallocate(tid, n);
+            nodemgr.deallocate<node>(tid, n);
             for (int i = 0; i < MAX_WAITS; ++i){
                 _mm_pause();
             }
