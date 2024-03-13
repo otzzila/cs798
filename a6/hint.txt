@@ -1,0 +1,4 @@
+
+I gave this tip to one student, and wanted to share it with all, in case anyone is still struggling with the KCAS BST implementation.
+
+"If a KCAS succeeds, the goal is to change some "before picture" into an "after picture." The "before picture" is entirely defined by the contents of the KCAS. In other words, the fields in the KCAS represent everything you know about the before picture. Try drawing that before picture by looking at the fields included in your KCAS. Don't draw any pointer, value, field, anything, unless it appears explicitly in your KCAS. What does the before picture look like? Does it perfectly capture the situation you want to apply the update in? Can you change fields that aren't drawn such that it would be incorrect to apply the update?"

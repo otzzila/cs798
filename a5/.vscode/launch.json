@@ -8,55 +8,55 @@
             "name": "a5 simple",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/a5/benchmark",
+            "program": "${workspaceFolder}/benchmark",
             "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "100", "-d", "0"],
             "environment": [{ "name": "config", "value": "Debug" }],
-            "cwd": "${workspaceFolder}/a5"
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "a5 add sub",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/a5/benchmark",
+            "program": "${workspaceFolder}/benchmark",
             "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "50", "-d", "50"],
             "environment": [{ "name": "config", "value": "Debug" }],
-            "cwd": "${workspaceFolder}/a5"
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "a5 2x add sub",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/a5/benchmark",
+            "program": "${workspaceFolder}/benchmark",
             "args": ["-t", "100", "-s", "100", "-n", "2", "-i", "50", "-d", "50"],
             "environment": [{ "name": "config", "value": "Debug" }],
-            "cwd": "${workspaceFolder}/a5"
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "a5 2x 20 20 size 10",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/a5/benchmark",
+            "program": "${workspaceFolder}/benchmark",
             "args": ["-t", "1000", "-s", "10", "-n", "2", "-i", "20", "-d", "20"],
             "environment": [{ "name": "config", "value": "Debug" }],
-            "cwd": "${workspaceFolder}/a5"
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "a5 4x add sub",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/a5/benchmark",
+            "program": "${workspaceFolder}/benchmark",
             "args": ["-t", "100", "-s", "100", "-n", "4", "-i", "50", "-d", "50"],
             "environment": [{ "name": "config", "value": "Debug" }],
-            "cwd": "${workspaceFolder}/a5"
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "a5 20 20",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/a5/benchmark",
+            "program": "${workspaceFolder}/benchmark",
             "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "20", "-d", "20"],
             "environment": [{ "name": "config", "value": "Debug" }],
-            "cwd": "${workspaceFolder}/a5"
+            "cwd": "${workspaceFolder}"
         },
     ]
 }

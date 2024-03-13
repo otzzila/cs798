@@ -1,0 +1,24 @@
+There was a bit of confusion on how to use the record manager in assignment 5, and you will have to do so in assignment 6 agan so I wanted to clarify.
+
+Most of the logic for the memory reclamation happens within the constructor and destructor of the guard object. As such, you must actually save the guard into a variable in order to enter a guarded section as described in Assignment 5. 
+
+So, you should do something like: 
+
+auto guard = getGuard(tid);
+Then, when this guard falls out of scope, you agree that you will not follow any pointers you have into the data structure that are not global (e.g. the head and tail node for the last assignment) that you obtained during the guarded section.
+
+Not saving the guard into a variable on the stack lets the compiler do whatever it wishes with it. The guard will not be allocated most likely - which is what was happening on the last assignment. I believe this is a compiler specific behaviour, however, and another compiler could allocate it and deallocate it whenever it feels like - which would be dangerous. 
+
+So why did you pass the sanitizer on the last assignment if you didn't reclaim properly? Well, when the destructor for the actual record manager is called, it cleans up all the remaining nodes that have yet to be reclaimed - so at the end of the execution it was fine!
+
+
+
+
+
+
+
+
+
+By the way, if you want to check whether memory is being reclaimed *during* your experiment (as it should be), and not just at the *end* of your experiment, then address sanitizer won't really help you. But, you can watch your programs memory usage on htop as it runs for a long time (e.g., 30-60 seconds). After some prefix of such a long trial, the memory usage for your program shouldn't be growing very much (if at all) or you likely aren't reclaiming memory until the end (which would not be correct behaviour).
+
+Another way to check this is to call the printStatus() member function of your simple_record_manager at the end of your execution. This will print some debugging statistics related to memory reclamation, which will probably be pretty buggy/unreliable (unless you specify a bunch of -D defines at compile time, which I don't want to describe), but it should print a correct "global epoch count/number." This number is the number of reclamation "epochs" that have occurred. If memory reclamation is happening *during* the experiment, then you should see a global epoch number that is larger than 1 (probably a few hundreds or thousands).
