@@ -1,6 +1,7 @@
 GPP = g++-9
 FLAGS = -O3 -g -std=c++2a
 #FLAGS += -DNDEBUG
+#FLAGS += -DTRACE=if\(1\) -DUSE_TRACE
 LDFLAGS = -pthread
 
 PROGRAMS = benchmark benchmark_sanitize
