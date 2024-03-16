@@ -1,0 +1,71 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "a5 simple",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "100", "-d", "0"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "a5 add sub",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "50", "-d", "50"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "a5 add sub small",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "50", "-d", "50"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "a5 2x add sub",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "100", "-s", "10", "-n", "2", "-i", "50", "-d", "50"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "a5 2x 20 20 size 10",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "1000", "-s", "10", "-n", "2", "-i", "20", "-d", "20"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "a5 4x add sub",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "100", "-s", "100", "-n", "4", "-i", "50", "-d", "50"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "a5 20 20",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark",
+            "args": ["-t", "100", "-s", "100", "-n", "1", "-i", "20", "-d", "20"],
+            "environment": [{ "name": "config", "value": "Debug" }],
+            "cwd": "${workspaceFolder}"
+        },
+    ]
+}
