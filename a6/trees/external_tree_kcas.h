@@ -11,6 +11,7 @@
 #include "../kcas/kcas.h"
 
 #include <cstdio>
+#include <sstream>
 
 using namespace std;
 class ExternalKCAS {
@@ -41,9 +42,9 @@ private:
 	const int minKey;
 	const int maxKey;
 
-	casword<Internal *> root;
+	
 	volatile char padding1[PADDING_BYTES];
-
+	casword<Internal *> root;
 	volatile char padding2[PADDING_BYTES];
 
 	
@@ -59,7 +60,8 @@ private:
 	
 
 public:
-	void printTree(Node * n, int depth);
+	string printTree(Node * n);
+	void printTreeHelp(Node * n, int depth, stringstream & ss);
 	ExternalKCAS(const int _numThreads, const int _minKey, const int _maxKey);
 	~ExternalKCAS();
 	bool contains(const int tid, const int & key);
@@ -125,6 +127,7 @@ bool ExternalKCAS::insertIfAbsent(const int tid, const int & key) {
 		// child direction is 0/1 as 0 is ignored here
 		int pdir = compareKeys(key, p->key) == 1 ? 1 : 0;
 		kcas::add(&p->child[pdir], n, n1);
+		kcas::add(&n->marked, false, false);
 		
 		if (kcas::execute()){
 			//TPRINT("Added " << key << endl);
@@ -150,15 +153,20 @@ bool ExternalKCAS::erase(const int tid, const int & key) {
 			return false;
 		}
 
-		
+		//cout << "Erasing " << key << endl;
+		//cout << "gp: " << gp->key << " @ " << gp << " p: " << p->key << " @ " << p << " n: " << n->key << " @ " << n << endl;
+		//printTree(root);
+		//cout << "-----------------------------" << endl;
 		
 
 		kcas::start();
 
 		int nDir = compareKeys(n->key, p->key) == 1 ? 1 : 0;
 		int pDir = compareKeys(p->key, gp->key) == 1 ? 1 : 0;
-		int pOtherDir = pDir == 1 ? 0 : 1;
+		int pOtherDir = nDir == 1 ? 0 : 1; // P's child that is not n!!!
 		Node * pOther = p->child[pOtherDir];
+		//cout << "pDir: " << pDir << " ";
+		//cout << "pOther: " << pOther->key << " @ " << pOther << endl;
 
 		//PRINT(nDir);
 		//PRINT(pDir);
@@ -180,6 +188,10 @@ bool ExternalKCAS::erase(const int tid, const int & key) {
 			//TPRINT("Removed " << key << endl);
 			// printf("-%d\n", key);
 			return true;
+
+
+			//printTree(root);
+			//cout << "=============================" << endl;
 		}
 
 	}
@@ -231,16 +243,22 @@ void ExternalKCAS::printDebuggingDetails() {
 
 }
 
+string ExternalKCAS::printTree(Node * n){
+	stringstream ss;
+	printTreeHelp(n, 0, ss);
+	cout << ss.str() << endl;
+	return ss.str();
+}
 
-void ExternalKCAS::printTree(Node * n, int depth){
+void ExternalKCAS::printTreeHelp(Node * n, int depth, stringstream & ss){
 	for (int i = 0; i < depth; i++){
-		cout << " ";
+		ss << " ";
 	}
-	cout << n->key;
+	ss << n->key << " m" << n->marked << " @" << n << "\n";
 
 	if (!n->isLeaf){
 		Internal * in = static_cast<Internal *>(n);
-		printTree(in->child[0], depth+1);
-		printTree(in->child[1], depth+1);
+		printTreeHelp(in->child[0], depth+1, ss);
+		printTreeHelp(in->child[1], depth+1, ss);
 	}
 }
