@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.html": "django-html",
+        "tuple": "cpp",
+        "ostream": "cpp",
+        "iosfwd": "cpp",
+        "iostream": "cpp",
+        "memory_resource": "cpp"
+    }
+}

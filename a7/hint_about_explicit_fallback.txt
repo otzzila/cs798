@@ -1,0 +1,29 @@
+"In the assignment, it is mentioned that the expansion of the hash table should be performed sequentially on the fallback path, this means that there will only be one thread performing the expansion"
+
+yes, until you get to the question about parallelizing the expansion using openmp, anyway
+
+"If I understand correctly, this means that if I detect that expansion is needed, I should call explicit_fallback() to perform the expansion on the fallback path. I'm not sure how to use this function, could you please provide an example of how to use it? If expand() should be called in the fallback path, there should be some way to tell the guard that this should only be performed there, am I right?"
+
+technically, explicit_fallback() is just an optimization. if you pretend it doesn't exist, and you simply use the tleguard, and explicit_commit() wherever it's convenient, then basically your expansion, which is very unlikely to succeed in hardware, will just abort repeatedly until it acquires the fallback lock, and runs on the fallback path. so the usage of explicit_fallback() isn't important for a correctly functioning algorithm. it just allows you to perform a minor optimization (which might not actually have any major performance difference): if you know you're definitely going to fail on the fast path over and over, then rather than trying the fast path a bunch of times, you can just insert explicit_fallback() when you know your transaction is doomed. this will cause you to take the lock, and then reexecute the tleguard critical section (as if you'd simply failed a bunch of times). and once you hold the lock, if you reach the explicit_fallback() function again, it will just be treated as a "no-op". (it checks if you hold the lock, and if you do, the call doesn't do anything, since you're already on the fallback path.)
+
+so, for example, if you use a tleguard to perform some accesses that should usually be able to commit, but then in some if() block, you know you won't be able to commit in hardware, you can just use explicit_fallback() as follows.
+
+tleguard guard (...);
+
+// do some stuff
+
+// that is transaction-friendly
+
+if (some condition) {
+
+    // if i get here i must do some stuff that will abort the transaction
+
+    explicit_fallback();
+
+    // do stuff that would abort a transaction
+
+}
+
+// do some more stuff that is transaction friendly
+
+explicit_commit();

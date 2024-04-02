@@ -1,0 +1,68 @@
+for keyrange in 1000000 100000 ; do echo "keyrange=$keyrange" ; for alg in yours occ ; do echo "  alg=$alg" ; for n in 1 2 4 8 18 36 54 72 90 108 126 144 ; do tput=$(LD_PRELOAD=../common/libjemalloc.so LD_LIBRARY_PATH=../hash/ ./benchmark -a $alg -t 3000 -s $keyrange -n $n -i 25 -d 25 -pin 0-17,72-89,18-35,90-107,36-53,108-125,54-71,126-143 | grep "throughput=" | cut -d"=" -f2) ; echo "    $n, $tput" ; done ; done ; done
+
+keyrange=1000000
+  alg=yours
+    1, 2588004
+    2, 4182986
+    4, 7123882
+    8, 12783668
+    18, 26646120
+    36, 38838222
+    54, 39853941
+    72, 48416573
+    90, 52441654
+    108, 54908413
+    126, 56005254
+    144, 56139536
+  alg=occ
+    1, 2442504
+    2, 3737991
+    4, 6386558
+    8, 11898674
+    18, 24721599
+    36, 41067546
+    54, 52989369
+    72, 66665472
+    90, 78030581
+    108, 89886075
+    126, 100034593
+    144, 109778894
+keyrange=100000
+  alg=yours
+    1, 2919334
+    2, 5639787
+    4, 11198733
+    8, 20665853
+    18, 43111525
+    36, 65242949
+    54, 55009244
+    72, 56266966
+    90, 66005742
+    108, 65224239
+    126, 66712421
+    144, 69882070
+  alg=occ
+    1, 2399167
+    2, 4480023
+    4, 8702788
+    8, 17067465
+    18, 36817827
+    36, 58047574
+    54, 69146581
+    72, 84747724
+    90, 95368101
+    108, 107139757
+    126, 118923274
+    144, 129682252
+
+so, with this very simple implementation (similar effort to a global lock!),
+i managed to perform a little more than half as well as the occ bst,
+which, incidentally, is the current fastest concurrent BST to my knowledge.
+(it's from a 2010 paper by Bronson and others that's in the presentation paper list.)
+not bad for very little effort...
+
+this is totally not necessary for this course,
+but if you're curious about the interaction between NUMA and HTM,
+i wrote a paper on the topic (see, esp., sec 3.2):
+https://mc.uwaterloo.ca/pubs/numatle/paper.spaa16.pdf
+
