@@ -302,7 +302,7 @@ int main(int argc, char** argv) {
     binding_configurePolicy(totalThreads);
     if (alg == NULL || strcmp(alg, "yours") == 0) {
         runExperiment<ExternalBST>(keyRangeSize, millisToRun, totalThreads, insertPercent, deletePercent);
-    } if (strcmp(alg, "b") == 0){
+    } else if (strcmp(alg, "b") == 0){
         runExperiment<ExternalBSTB>(keyRangeSize, millisToRun, totalThreads, insertPercent, deletePercent);
     } else {
         runExperiment< OCCBST<int, int *> >(keyRangeSize, millisToRun, totalThreads, insertPercent, deletePercent);
