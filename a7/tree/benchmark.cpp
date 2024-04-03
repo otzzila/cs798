@@ -11,6 +11,7 @@
 
 #include "util.h"
 #include "tree.h"                           // your tree
+#include "tree_prealloc_internal.h"         // Version B
 #include "bronson_pext_bst_occ/adapter.h"   // competitor's tree
 #include "binding.h"
 
@@ -301,6 +302,8 @@ int main(int argc, char** argv) {
     binding_configurePolicy(totalThreads);
     if (alg == NULL || strcmp(alg, "yours") == 0) {
         runExperiment<ExternalBST>(keyRangeSize, millisToRun, totalThreads, insertPercent, deletePercent);
+    } if (strcmp(alg, "b") == 0){
+        runExperiment<ExternalBSTB>(keyRangeSize, millisToRun, totalThreads, insertPercent, deletePercent);
     } else {
         runExperiment< OCCBST<int, int *> >(keyRangeSize, millisToRun, totalThreads, insertPercent, deletePercent);
     }
