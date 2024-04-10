@@ -111,9 +111,9 @@ void TLEHashTableExpand::migrateInsert(const int & key){
         int found = data[index];
 
         if (found == EMPTY){
-            volatile int expected = EMPTY;
+            int expected = EMPTY;
             // Can't use TLEGuard to CAS because we already have the gloval lock
-            bool success = __atomic_compare_exchange_n(&data[index], (void*)&expected, key, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQ_REL);
+            bool success = __atomic_compare_exchange_n(&data[index], &expected, key, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
             
             if (success){
                 return;
