@@ -80,7 +80,7 @@ void TLEHashTableExpand::expand(const int tid) {
     TRACE {cout << "Expanding" << endl;}
     TRACE {PRINT(capacity); }
     oldCapacity = capacity;
-    capacity = max(accurateSize, int64_t(1)) * 8;
+    capacity = max(max(accurateSize, int64_t(1)) * 4, oldCapacity);
     TRACE {PRINT(capacity); }
 
     data = new volatile int [capacity];
