@@ -107,7 +107,7 @@ void TLEHashTableExpand::migrateInsert(const int & key){
     int32_t h = murmur3(key);
 
     for(int probe=0; probe < capacity; ++probe){
-        int index = (h+probe) % capacity;
+        int64_t index = (h+probe) % capacity;
         int found = data[index];
 
         if (found == EMPTY){
@@ -138,7 +138,7 @@ restart:
         }
 
         // Look at next value
-        int index = (h+probeCount) % capacity;
+        int64_t index = (h+probeCount) % capacity;
         int found = data[index];
 
         // Attempt the insert
