@@ -107,9 +107,9 @@ void TLEHashTableExpand::expand(const int tid) {
 }
 
 void TLEHashTableExpand::migrateInsert(const int & key){
-    int32_t h = murmur3(key);
+    int64_t h = murmur3(key);
 
-    for(int probe=0; probe < capacity; ++probe){
+    for(int64_t probe=0; probe < capacity; ++probe){
         int64_t index = (h+probe) % capacity;
         int found = data[index];
 
@@ -124,11 +124,11 @@ void TLEHashTableExpand::migrateInsert(const int & key){
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool TLEHashTableExpand::insertIfAbsent(const int tid, const int & key) {
-    int32_t h = murmur3(key);
+    int64_t h = murmur3(key);
 restart:
 {
     TLEGuard guard = TLEGuard(tid); // Must keep the guard out here in case capacity changes
-    for (int probeCount = 0; probeCount < capacity; ++probeCount){
+    for (int64_t probeCount = 0; probeCount < capacity; ++probeCount){
         
         if (isExpandNeeded(tid, probeCount)){
             guard.explicit_fallback();
@@ -164,12 +164,12 @@ restart:
 
 // semantics: try to erase key. return true if successful, and false otherwise
 bool TLEHashTableExpand::erase(const int tid, const int & key) {
-    int32_t h = murmur3(key);
+    int64_t h = murmur3(key);
 
     {
         TLEGuard guard = TLEGuard(tid);
-        for(int i=0; i < capacity; ++i){
-            int index = (h+i) % capacity;
+        for(int64_t i=0; i < capacity; ++i){
+            int64_t index = (h+i) % capacity;
             int found = data[index];
 
             if (found == key){
