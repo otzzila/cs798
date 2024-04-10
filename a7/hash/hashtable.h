@@ -87,16 +87,13 @@ void TLEHashTableExpand::expand(const int tid) {
     for (int64_t i=0;i<capacity;++i) data[i] = EMPTY;
 
     // Now move over old values
+    #pragma omp parallel for
     for (int64_t i=0;i<oldCapacity;++i){
         int key = old[i];
         if (key != EMPTY && key != TOMBSTONE){
             migrateInsert(key);
         }
     }
-
-
-
-
 
     // suggested adjustment to counters at the end of expansion:
     approxInserts->set(accurateSize);
@@ -114,8 +111,14 @@ void TLEHashTableExpand::migrateInsert(const int & key){
         int found = data[index];
 
         if (found == EMPTY){
-            data[index] = key;
-            return;
+            volatile int expected = EMPTY;
+            // Can't use TLEGuard to CAS because we already have the gloval lock
+            bool success = __atomic_compare_exchange_n(&data[index], (void*)&expected, key, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQ_REL);
+            
+            if (success){
+                return;
+            }
+            // Otherwise continue trying to insert it
         }
     }
 
