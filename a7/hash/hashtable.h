@@ -22,6 +22,8 @@ private:
     counter * approxInserts;                // only create ONCE in the constructor, then use set() to reset its value if needed
     counter * approxDeletes;                // only create ONCE in the constructor, then use set() to reset its value if needed
     char padding1[PADDING_BYTES];
+    volatile uint64_t version;
+    char padding1[PADDING_BYTES];
 
     bool isExpandNeeded(const int tid, int64_t probeCount);
     void expand(const int tid);
@@ -47,6 +49,7 @@ TLEHashTableExpand::TLEHashTableExpand(const int _numThreads, const int64_t _cap
     approxDeletes = new counter(numThreads);
     old = NULL;
     oldCapacity = 0;
+    version = 0;
     debugTimer.startTimer();
 }
 
@@ -73,6 +76,8 @@ void TLEHashTableExpand::expand(const int tid) {
 
     // EXPANSION CODE HERE :)
     int64_t accurateSize = getAccurateSize();
+
+    version += 1;
 
     delete[] old;
     old = data;
@@ -129,10 +134,13 @@ void TLEHashTableExpand::migrateInsert(const int & key){
 bool TLEHashTableExpand::insertIfAbsent(const int tid, const int & key) {
     int64_t h = murmur3(key);
 restart:
-{
-    TLEGuard guard = TLEGuard(tid); // Must keep the guard out here in case capacity changes
+    uint64_t currentVersion = version;
     for (int64_t probeCount = 0; probeCount < capacity; ++probeCount){
-        
+        TLEGuard guard = TLEGuard(tid); // Must keep the guard out here in case capacity changes
+        if (version != currentVersion){
+            goto restart;
+        }
+
         if (isExpandNeeded(tid, probeCount)){
             guard.explicit_fallback();
             // Not sure if this is required, but should be fast if we have the lock
@@ -158,8 +166,6 @@ restart:
         }
         // else continue to next probeCount
     }
-}
-
 
     assert(false);
     return false;
@@ -168,23 +174,26 @@ restart:
 // semantics: try to erase key. return true if successful, and false otherwise
 bool TLEHashTableExpand::erase(const int tid, const int & key) {
     int64_t h = murmur3(key);
-
-    {
-        TLEGuard guard = TLEGuard(tid);
-        for(int64_t i=0; i < capacity; ++i){
-            int64_t index = (h+i) % capacity;
-            int found = data[index];
-
-            if (found == key){
-                data[index] = TOMBSTONE;
-                approxDeletes->inc(tid);
-                return true;
-            } else if (found == EMPTY){
-                guard.explicit_commit();
-                return false;
-            }
-            // else continue to next value
+    restart:
+    uint64_t currentVersion = version;
+      
+    for(int64_t i=0; i < capacity; ++i){
+        if (currentVersion != version){
+            goto restart;
         }
+        TLEGuard guard = TLEGuard(tid);
+        int64_t index = (h+i) % capacity;
+        int found = data[index];
+
+        if (found == key){
+            data[index] = TOMBSTONE;
+            approxDeletes->inc(tid);
+            return true;
+        } else if (found == EMPTY){
+            guard.explicit_commit();
+            return false;
+        }
+        // else continue to next value
     }
 
     assert(false);
